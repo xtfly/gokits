@@ -37,11 +37,11 @@ func IsEmail(str string) bool {
 	return emailRegexp.MatchString(str)
 }
 
-func isEmailRFC(str string) bool {
+func IsEmailRFC(str string) bool {
 	return strictemailRegexp.MatchString(str)
 }
 
-func isURL(str string) bool {
+func IsURL(str string) bool {
 	return urlRegexp.MatchString(str)
 }
 

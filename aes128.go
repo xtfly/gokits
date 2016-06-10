@@ -28,6 +28,7 @@ var (
 	ErrCrc         = errors.New("factor crc is invalid")
 )
 
+// the crypto object
 type Crypto struct {
 	block cipher.Block
 	key   []byte

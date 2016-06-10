@@ -87,7 +87,7 @@ func (m *Message) Tolist() []string {
 }
 
 // Bytes returns the mail data
-func (m *Message) Bytes() []byte {
+func (m *Message) bytes() []byte {
 	buf := bytes.NewBuffer(nil)
 
 	buf.WriteString("From: " + m.From + "\n")
@@ -142,6 +142,6 @@ func (m *Message) Bytes() []byte {
 	return buf.Bytes()
 }
 
-func SendEmail(addr string, auth smtp.Auth, m *Message) error {
-	return smtp.SendMail(addr, auth, m.From, m.Tolist(), m.Bytes())
+func (m *Message) Send(auth smtp.Auth) error {
+	return smtp.SendMail(m.From, auth, m.From, m.Tolist(), m.bytes())
 }

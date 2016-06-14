@@ -1,6 +1,10 @@
 package gokits
 
-import "os"
+import (
+	"os"
+	"os/exec"
+	"path/filepath"
+)
 
 // FileExist checks whether a file or directory exists.
 // It returns false when the file or directory does not exist.
@@ -36,4 +40,11 @@ func FileSize(file string) (int64, error) {
 		return 0, err
 	}
 	return f.Size(), nil
+}
+
+// GetProcPwd returns the complete directory of the current execution file
+func GetProcPwd() string {
+	file, _ := exec.LookPath(os.Args[0])
+	path, _ := filepath.Abs(filepath.Dir(file))
+	return path
 }

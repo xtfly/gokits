@@ -260,7 +260,7 @@ func newCacheWithJanitor(ci time.Duration, m map[string]Item) *Cache {
 // Return a new cache with a given cleanup interval.
 // If the cleanup interval is less than one, expired items are not
 // deleted from the cache before calling c.DeleteExpired().
-func New(cleanupInterval time.Duration) *Cache {
+func NewCache(cleanupInterval time.Duration) *Cache {
 	items := make(map[string]Item)
 	return newCacheWithJanitor(cleanupInterval, items)
 }

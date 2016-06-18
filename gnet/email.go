@@ -1,4 +1,4 @@
-package gokits
+package gnet
 
 import (
 	"bytes"
@@ -11,21 +11,24 @@ import (
 	"time"
 )
 
-type Attachment struct {
+// attachment ...
+type attachment struct {
 	Filename string
 	Data     []byte
 	Inline   bool
 }
 
+// Message ...
 type Message struct {
-	From            string
-	To              []string
-	Cc              []string
-	Bcc             []string
-	Subject         string
-	Body            string
-	BodyContentType string
-	Attachments     map[string]*Attachment
+	From string
+	To   []string
+	Cc   []string
+	Bcc  []string
+
+	subject         string
+	body            string
+	bodyContentType string
+	attachments     map[string]*attachment
 }
 
 func (m *Message) attach(file string, inline bool) error {
@@ -36,7 +39,7 @@ func (m *Message) attach(file string, inline bool) error {
 
 	_, filename := filepath.Split(file)
 
-	m.Attachments[filename] = &Attachment{
+	m.attachments[filename] = &attachment{
 		Filename: filename,
 		Data:     data,
 		Inline:   inline,
@@ -45,19 +48,19 @@ func (m *Message) attach(file string, inline bool) error {
 	return nil
 }
 
+// Attach a file to email by ouline
 func (m *Message) Attach(file string) error {
 	return m.attach(file, false)
 }
 
+// Inline attach a file to email by inline
 func (m *Message) Inline(file string) error {
 	return m.attach(file, true)
 }
 
 func newMessage(subject string, body string, bodyContentType string) *Message {
-	m := &Message{Subject: subject, Body: body, BodyContentType: bodyContentType}
-
-	m.Attachments = make(map[string]*Attachment)
-
+	m := &Message{subject: subject, body: body, bodyContentType: bodyContentType}
+	m.attachments = make(map[string]*attachment)
 	return m
 }
 
@@ -66,12 +69,12 @@ func NewMessage(subject string, body string) *Message {
 	return newMessage(subject, body, "text/plain")
 }
 
-// NewMessage returns a new Message that can compose an HTML email with attachments
+// NewHTMLMessage returns a new Message that can compose an HTML email with attachments
 func NewHTMLMessage(subject string, body string) *Message {
 	return newMessage(subject, body, "text/html")
 }
 
-// ToList returns all the recipients of the email
+// Tolist returns all the recipients of the email
 func (m *Message) Tolist() []string {
 	tolist := m.To
 
@@ -100,22 +103,22 @@ func (m *Message) bytes() []byte {
 		buf.WriteString("Cc: " + strings.Join(m.Cc, ",") + "\n")
 	}
 
-	buf.WriteString("Subject: " + m.Subject + "\n")
+	buf.WriteString("Subject: " + m.subject + "\n")
 	buf.WriteString("MIME-Version: 1.0\n")
 
 	boundary := "f46d043c813270fc6b04c2d223da"
 
-	if len(m.Attachments) > 0 {
+	if len(m.attachments) > 0 {
 		buf.WriteString("Content-Type: multipart/mixed; boundary=" + boundary + "\n")
 		buf.WriteString("--" + boundary + "\n")
 	}
 
-	buf.WriteString(fmt.Sprintf("Content-Type: %s; charset=utf-8\n\n", m.BodyContentType))
-	buf.WriteString(m.Body)
+	buf.WriteString(fmt.Sprintf("Content-Type: %s; charset=utf-8\n\n", m.bodyContentType))
+	buf.WriteString(m.body)
 	buf.WriteString("\n")
 
-	if len(m.Attachments) > 0 {
-		for _, attachment := range m.Attachments {
+	if len(m.attachments) > 0 {
+		for _, attachment := range m.attachments {
 			buf.WriteString("\n\n--" + boundary + "\n")
 
 			if attachment.Inline {
@@ -142,6 +145,7 @@ func (m *Message) bytes() []byte {
 	return buf.Bytes()
 }
 
-func (m *Message) Send(auth smtp.Auth) error {
-	return smtp.SendMail(m.From, auth, m.From, m.Tolist(), m.bytes())
+// Send message to smtp server
+func (m *Message) Send(addr string, auth smtp.Auth) error {
+	return smtp.SendMail(addr, auth, m.From, m.Tolist(), m.bytes())
 }

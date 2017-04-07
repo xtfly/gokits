@@ -37,21 +37,21 @@ func hmacSha256(plaintext, salt string) string {
 	return hex.EncodeToString(toencrypt)
 }
 
-// generate a hmac sha256 string
+// GenHmacSha256 generate a hmac sha256 string
 func GenHmacSha256(plaintext string, saltlen int) string {
 	salt := getSalt(sha256saltLen)
 	encrypted := hmacSha256(plaintext, salt)
 	return encrypted
 }
 
-// generate a hmac sha256 string
+// GenPasswd generate a hmac sha256 string
 func GenPasswd(password string, saltlen int) (string, string) {
 	salt := getSalt(sha256saltLen)
 	encrypted := hmacSha256(password, salt)
 	return encrypted, salt
 }
 
-// compare the password
+// CmpPasswd compare the password
 func CmpPasswd(passwd, salt, encrypted string) bool {
 	nc := hmacSha256(passwd, salt)
 	if nc == encrypted {

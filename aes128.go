@@ -23,12 +23,13 @@ var keysalt = []byte{
 }
 
 var (
-	ErrAESTextSize = errors.New("ciphertext is not a multiple of the block size")
-	ErrAESPadding  = errors.New("cipher padding size error")
-	ErrCrc         = errors.New("factor crc is invalid")
+	// ErrAESTextSize ...
+	ErrAESTextSize = errors.New("ciphertext length is not a multiple of the block size")
+	// ErrAESPadding ...
+	ErrAESPadding = errors.New("cipher padding size error")
 )
 
-// the crypto object
+// Crypto the crypto object
 type Crypto struct {
 	block cipher.Block
 	key   []byte
@@ -47,21 +48,18 @@ func calKey(factor string) []byte {
 	blen := aes.BlockSize
 	if len(fbs) >= blen {
 		return fbs[:blen]
-	} else {
-		panic("export key fatal failed.")
 	}
+	panic("export key fatal failed.")
 }
 
-func NewCrypto(factor, crc string) (*Crypto, error) {
+// NewCrypto create a instance of *Crypto
+func NewCrypto(factor string) (*Crypto, error) {
 	c := new(Crypto)
-	return c, c.Init(factor, crc)
+	return c, c.init(factor)
 }
 
-func (c *Crypto) Init(factor, crc string) error {
-	if KermitStr(factor) != crc {
-		return ErrCrc
-	}
-
+// init
+func (c *Crypto) init(factor string) error {
 	c.key = calKey(factor)
 	block, err := aes.NewCipher([]byte(c.key))
 	if err != nil {
@@ -71,6 +69,7 @@ func (c *Crypto) Init(factor, crc string) error {
 	return nil
 }
 
+// Decrypt from an encrypted array of byte
 func (c *Crypto) Decrypt(src []byte) ([]byte, error) {
 	blen := aes.BlockSize
 
@@ -97,20 +96,21 @@ func (c *Crypto) Decrypt(src []byte) ([]byte, error) {
 	return decryptText[:srcLen-paddingLen], nil
 }
 
-// AES解密
+// DecryptStr decrypt from an encrypted base64 string
 func (c *Crypto) DecryptStr(scuritytext string) (string, error) {
 	src, err := base64.StdEncoding.DecodeString(scuritytext)
 	if err != nil {
 		return "", err
 	}
-	if d, err := c.Decrypt(src); err != nil {
+
+	d, err := c.Decrypt(src)
+	if err != nil {
 		return "", err
-	} else {
-		return string(d), err
 	}
+	return string(d), err
 }
 
-// AES加密
+// Encrypt an array byte
 func (c *Crypto) Encrypt(src []byte) ([]byte, error) {
 	blen := aes.BlockSize
 
@@ -137,13 +137,12 @@ func (c *Crypto) Encrypt(src []byte) ([]byte, error) {
 
 }
 
-// AES加密
+// EncryptStr encrypt a string
 func (c *Crypto) EncryptStr(plaintext string) (string, error) {
 	src := []byte(plaintext)
-	if encrypted, err := c.Encrypt(src); err != nil {
+	encrypted, err := c.Encrypt(src)
+	if err != nil {
 		return "", err
-	} else {
-		return base64.StdEncoding.EncodeToString(encrypted), nil
 	}
-
+	return base64.StdEncoding.EncodeToString(encrypted), nil
 }

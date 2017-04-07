@@ -11,11 +11,12 @@ import (
 	crand "crypto/rand"
 )
 
+// NewRandWithPrefix Create a rang string with prefix
 func NewRandWithPrefix(prefix string, len int) string {
 	return hex.EncodeToString([]byte(prefix)) + NewRand(len)
 }
 
-// Create a rang string
+// NewRand Create a rang string
 func NewRand(len int) string {
 	u := make([]byte, len/2)
 	// Reader is a global, shared instance of a cryptographically strong pseudo-random generator.
@@ -49,14 +50,14 @@ func NewUUID() string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", u[0:4], u[4:6], u[6:8], u[8:10], u[10:])
 }
 
-//生成规定范围内的整数
-//设置起始数字范围，0开始,n截止
+// RangeRand 生成规定范围内的整数
+// 设置起始数字范围，0开始,n截止
 func RangeRand(n int) int {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	return r.Intn(n)
 }
 
-//标准正态分布随机整数，n为随机个数,从0开始
+// NormRand 标准正态分布随机整数，n为随机个数,从0开始
 func NormRand(n int64) float64 {
 	//sample = NormFloat64() * desiredStdDev + desiredMean
 	// 默认位置参数(期望desiredMean)为0,尺度参数(标准差desiredStdDev)为1.
@@ -70,7 +71,7 @@ func NormRand(n int64) float64 {
 	for i < n {
 		rn := int64(r.NormFloat64()*desiredStdDev + desiredMean)
 		sample = rn % n
-		i += 1
+		i++
 	}
 
 	return math.Abs(float64(sample))

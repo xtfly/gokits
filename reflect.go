@@ -5,8 +5,10 @@ import (
 	"strconv"
 )
 
+// RefVal type of reflect.Value
 type RefVal reflect.Value
 
+// ToString return a string
 func (r RefVal) ToString() string {
 	v := reflect.Value(r)
 	kind := v.Kind()
@@ -20,6 +22,7 @@ func (r RefVal) ToString() string {
 	return ""
 }
 
+// IsEmpty check the refvalue is empty
 func (r RefVal) IsEmpty() bool {
 	v := reflect.Value(r)
 	k := v.Kind()

@@ -8,16 +8,17 @@ import (
 )
 
 const (
-	// For use with functions that take an expiration time.
+	// NoExpiration for use with functions that take an expiration time.
 	NoExpiration time.Duration = -1
 )
 
+// Item cached item
 type Item struct {
 	Object     interface{}
 	Expiration int64
 }
 
-// Returns true if the item has expired.
+// Expired Returns true if the item has expired.
 func (item Item) Expired() bool {
 	if item.Expiration == 0 {
 		return false
@@ -25,6 +26,7 @@ func (item Item) Expired() bool {
 	return time.Now().UnixNano() > item.Expiration
 }
 
+// Cache a cache struct
 type Cache struct {
 	*cache
 }
@@ -41,7 +43,7 @@ type janitor struct {
 	stop     chan bool
 }
 
-// Add an item to the cache, replacing any existing item.  If it is -1
+// Set Add an item to the cache, replacing any existing item.  If it is -1
 // (NoExpiration), the item never expires.
 func (c *cache) Set(k string, x interface{}, d time.Duration) {
 	// "Inlining" of set
@@ -81,7 +83,7 @@ func (c *cache) Add(k string, x interface{}, d time.Duration) error {
 	return nil
 }
 
-// Set a new value for the cache key only if it already exists, and the existing
+// Replace Set a new value for the cache key only if it already exists, and the existing
 // item hasn't expired. Returns an error otherwise.
 func (c *cache) Replace(k string, x interface{}, d time.Duration) error {
 	c.mu.Lock()
@@ -172,7 +174,7 @@ func (c *cache) DeleteExpired() {
 	}
 }
 
-// Sets an (optional) function that is called with the key and value when an
+// OnEvicted Sets an (optional) function that is called with the key and value when an
 // item is evicted from the cache. (Including when it is deleted manually, but
 // not when it is overwritten.) Set to nil to disable.
 func (c *cache) OnEvicted(f func(string, interface{})) {
@@ -181,7 +183,7 @@ func (c *cache) OnEvicted(f func(string, interface{})) {
 	c.mu.Unlock()
 }
 
-// Returns the number of items in the cache. This may include items that have
+// ItemCount returns the number of items in the cache. This may include items that have
 // expired, but have not yet been cleaned up. Equivalent to len(c.Items()).
 func (c *cache) ItemCount() int {
 	c.mu.RLock()
@@ -197,6 +199,7 @@ func (c *cache) Clear() {
 	c.mu.Unlock()
 }
 
+// UpdateExpiration
 func (c *cache) UpdateExpiration(k string, Expiration int64) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -209,7 +212,7 @@ func (c *cache) UpdateExpiration(k string, Expiration int64) error {
 
 }
 
-func (j *janitor) Run(c *cache) {
+func (j *janitor) run(c *cache) {
 	j.stop = make(chan bool)
 	ticker := time.NewTicker(j.Interval)
 	for {
@@ -232,7 +235,7 @@ func runJanitor(c *cache, ci time.Duration) {
 		Interval: ci,
 	}
 	c.janitor = j
-	go j.Run(c)
+	go j.run(c)
 }
 
 func newCache(m map[string]Item) *cache {
@@ -257,7 +260,7 @@ func newCacheWithJanitor(ci time.Duration, m map[string]Item) *Cache {
 	return C
 }
 
-// Return a new cache with a given cleanup interval.
+// NewCache return a new cache with a given cleanup interval.
 // If the cleanup interval is less than one, expired items are not
 // deleted from the cache before calling c.DeleteExpired().
 func NewCache(cleanupInterval time.Duration) *Cache {

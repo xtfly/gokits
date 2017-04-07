@@ -1,8 +1,6 @@
 package gokits
 
-import "strings"
-
-//----------------------------------------------------------
+// SliceStrTo convert string slice to interface{} slice
 func SliceStrTo(sts []string) []interface{} {
 	uns := make([]interface{}, len(sts))
 	for _, v := range sts {
@@ -11,7 +9,7 @@ func SliceStrTo(sts []string) []interface{} {
 	return uns
 }
 
-//----------------------------------------------------------
+// SliceInt64To convert int64 slice to interface{} slice
 func SliceInt64To(sts []int64) []interface{} {
 	uns := make([]interface{}, len(sts))
 	for _, v := range sts {
@@ -21,19 +19,18 @@ func SliceInt64To(sts []int64) []interface{} {
 
 }
 
-//----------------------------------------------------------
-func IsSliceContainsStr(sl []string, str string) bool {
-	str = strings.ToLower(str)
+// StrSliceContains ....
+func StrSliceContains(sl []string, str string) bool {
 	for _, s := range sl {
-		if strings.ToLower(s) == str {
+		if s == str {
 			return true
 		}
 	}
 	return false
 }
 
-//----------------------------------------------------------
-func IsSliceContainsInt64(sl []int64, i int64) bool {
+// Int64SliceContains ...
+func Int64SliceContains(sl []int64, i int64) bool {
 	for _, s := range sl {
 		if s == i {
 			return true

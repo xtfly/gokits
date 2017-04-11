@@ -1,4 +1,4 @@
-package gokits
+package gnet
 
 import (
 	"bytes"

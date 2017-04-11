@@ -1,4 +1,4 @@
-package gokits
+package gslice
 
 // SliceStrTo convert string slice to interface{} slice
 func SliceStrTo(sts []string) []interface{} {

@@ -1,4 +1,4 @@
-package gokits
+package gstr
 
 import "regexp"
 

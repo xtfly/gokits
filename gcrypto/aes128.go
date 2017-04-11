@@ -1,4 +1,4 @@
-package gokits
+package gcrypto
 
 import (
 	"crypto/aes"

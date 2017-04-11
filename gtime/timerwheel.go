@@ -12,30 +12,28 @@ import (
 )
 
 const (
-	defaultTickDuration = 100 * time.Millisecond //默认的时间轮 间隔时间 1秒
+	defaultTickDuration = 100 * time.Millisecond //默认的时间轮间隔时间
 	defaultWheelCount   = 512                    //默认的卡槽数512个
 )
 
 // TimerWheel 时钟轮
 type TimerWheel struct {
-	state         int           //启动(1)or 停止(-1) 状态
-	tickDuration  time.Duration //卡槽每次跳动的时间间隔
-	roundDuration time.Duration //一轮耗时
-	wheelCount    int           //卡槽数
-	wheel         []*Iterator   //卡槽
-	tick          *time.Ticker  //时钟
-	lock          sync.Mutex    //锁
-	wheelCursor   int           //当前卡槽位置
-	mask          int           //卡槽最大索引数
+	lock          sync.Mutex    // 锁
+	tickDuration  time.Duration // 卡槽每次跳动的时间间隔
+	roundDuration time.Duration // 一轮耗时
+	wheelCount    int           // 卡槽数
+	wheel         []*iterator   // 卡槽
+	quit          chan struct{} // 退出
+	wheelCursor   int           // 当前卡槽位置
 }
 
-// Iterator 时间轮卡槽迭代器
-type Iterator struct {
-	items map[string]*WheelTimeOut
+// iterator 时间轮卡槽迭代器
+type iterator struct {
+	items map[string]*wheelTimeOut
 }
 
-// WheelTimeOut 超时处理对象
-type WheelTimeOut struct {
+// wheelTimeOut 超时处理对象
+type wheelTimeOut struct {
 	id       string        // 定时器标识
 	delay    time.Duration // 延迟时间
 	index    int           // 卡槽索引位置
@@ -50,43 +48,45 @@ func NewTimerWheel() *TimerWheel {
 	return &TimerWheel{
 		tickDuration:  defaultTickDuration,
 		wheelCount:    defaultWheelCount,
-		wheel:         createWheel(),
+		wheel:         createWheel(defaultWheelCount),
+		quit:          make(chan struct{}),
 		wheelCursor:   0,
-		mask:          defaultWheelCount - 1,
 		roundDuration: defaultTickDuration * defaultWheelCount,
 	}
 }
 
 // Start 启动时间轮
 func (t *TimerWheel) Start() {
-	t.lock.Lock()
-
-	t.tick = time.NewTicker(defaultTickDuration)
-	defer t.lock.Unlock()
-
+	tick := time.NewTicker(t.tickDuration)
 	go func() {
-		for range t.tick.C {
-			t.wheelCursor++
-			if t.wheelCursor == defaultWheelCount {
-				t.wheelCursor = 0
-			}
+		for {
+			select {
+			case <-tick.C:
+				t.wheelCursor++
+				if t.wheelCursor == t.wheelCount {
+					t.wheelCursor = 0
+				}
 
-			iterator := t.wheel[t.wheelCursor]
-			tasks := t.fetchExpiredTimeouts(iterator)
-			t.notifyExpiredTimeOut(tasks)
+				iterator := t.wheel[t.wheelCursor]
+				tasks := t.fetchExpiredTimeouts(iterator)
+				t.notifyExpiredTimeOut(tasks)
+			case <-t.quit:
+				tick.Stop()
+				return
+			}
 		}
 	}()
 }
 
 // Stop 停止时间轮
 func (t *TimerWheel) Stop() {
-	t.tick.Stop()
+	t.quit <- struct{}{}
 }
 
-func createWheel() []*Iterator {
-	arr := make([]*Iterator, defaultWheelCount)
-	for v := 0; v < defaultWheelCount; v++ {
-		arr[v] = &Iterator{items: make(map[string]*WheelTimeOut)}
+func createWheel(wheelCount int) []*iterator {
+	arr := make([]*iterator, wheelCount)
+	for v := 0; v < wheelCount; v++ {
+		arr[v] = &iterator{items: make(map[string]*wheelTimeOut)}
 	}
 	return arr
 }
@@ -106,7 +106,7 @@ func (t *TimerWheel) AfterFunc(delay time.Duration, times int, f func()) (string
 		times = 0x0FFFFFFF
 	}
 
-	timeOut := &WheelTimeOut{
+	timeOut := &wheelTimeOut{
 		delay: delay,
 		task:  f,
 		times: times,
@@ -116,7 +116,7 @@ func (t *TimerWheel) AfterFunc(delay time.Duration, times int, f func()) (string
 	return tid, err
 }
 
-// Cancel ..
+// Cancel 取消定时器
 func (t *TimerWheel) Cancel(timerID string) error {
 	for _, it := range t.wheel {
 		for k := range it.items {
@@ -128,7 +128,7 @@ func (t *TimerWheel) Cancel(timerID string) error {
 	return nil
 }
 
-func (t *TimerWheel) scheduleTimeOut(timeOut *WheelTimeOut) (string, error) {
+func (t *TimerWheel) scheduleTimeOut(timeOut *wheelTimeOut) (string, error) {
 	if timeOut.delay < t.tickDuration {
 		timeOut.delay = t.tickDuration
 	}
@@ -150,8 +150,8 @@ func (t *TimerWheel) scheduleTimeOut(timeOut *WheelTimeOut) (string, error) {
 	defer t.lock.Unlock()
 
 	stopIndex := t.wheelCursor + int(relativeIndex)
-	if stopIndex >= defaultWheelCount {
-		stopIndex = stopIndex - defaultWheelCount
+	if stopIndex >= t.wheelCount {
+		stopIndex = stopIndex - t.wheelCount
 		timeOut.rounds = int(remainingRounds) + 1
 	} else {
 		timeOut.rounds = int(remainingRounds)
@@ -159,8 +159,8 @@ func (t *TimerWheel) scheduleTimeOut(timeOut *WheelTimeOut) (string, error) {
 	timeOut.index = stopIndex
 	item := t.wheel[stopIndex]
 	if item == nil {
-		item = &Iterator{
-			items: make(map[string]*WheelTimeOut),
+		item = &iterator{
+			items: make(map[string]*wheelTimeOut),
 		}
 	}
 
@@ -179,16 +179,16 @@ func (t *TimerWheel) scheduleTimeOut(timeOut *WheelTimeOut) (string, error) {
 }
 
 // 判断当前卡槽中是否有超时任务,将超时task加入切片中
-func (t *TimerWheel) fetchExpiredTimeouts(iterator *Iterator) []*WheelTimeOut {
+func (t *TimerWheel) fetchExpiredTimeouts(iter *iterator) []*wheelTimeOut {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	task := []*WheelTimeOut{}
+	task := []*wheelTimeOut{}
 
-	for k, v := range iterator.items {
+	for k, v := range iter.items {
 		if v.rounds <= 0 { //已经超时了
 			task = append(task, v)
-			delete(iterator.items, k)
+			delete(iter.items, k)
 		} else {
 			v.rounds--
 		}
@@ -198,7 +198,7 @@ func (t *TimerWheel) fetchExpiredTimeouts(iterator *Iterator) []*WheelTimeOut {
 }
 
 // 执行超时任务
-func (t *TimerWheel) notifyExpiredTimeOut(tasks []*WheelTimeOut) {
+func (t *TimerWheel) notifyExpiredTimeOut(tasks []*wheelTimeOut) {
 	for _, task := range tasks {
 		task.exptimes++
 		if task.exptimes < task.times { // 如果执行的次数小于设置的次数，则再次调度

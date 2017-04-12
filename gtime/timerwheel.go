@@ -39,6 +39,7 @@ type wheelTimeOut struct {
 	index    int           // 卡槽索引位置
 	rounds   int           // 需要转动的周期数
 	task     func()        // 到期执行的任务
+	outCh    chan struct{} // 到期事件队列
 	times    int           // 超时设定的次数
 	exptimes int           // 已超时的次数
 }
@@ -93,7 +94,6 @@ func createWheel(wheelCount int) []*iterator {
 
 // AfterFunc 添加一个超时任务
 func (t *TimerWheel) AfterFunc(delay time.Duration, times int, f func()) (string, error) {
-
 	if f == nil {
 		return "", errors.New("task is empty")
 	}
@@ -116,14 +116,32 @@ func (t *TimerWheel) AfterFunc(delay time.Duration, times int, f func()) (string
 	return tid, err
 }
 
+// After 添加一个超时任务
+func (t *TimerWheel) After(delay time.Duration, times int) (chan struct{}, string, error) {
+	if delay <= 0 {
+		return nil, "", errors.New("delay Must be greater than zero")
+	}
+
+	if times <= 0 {
+		times = 0x0FFFFFFF
+	}
+
+	timeOut := &wheelTimeOut{
+		delay: delay,
+		outCh: make(chan struct{}),
+		times: times,
+	}
+
+	tid, err := t.scheduleTimeOut(timeOut)
+	return timeOut.outCh, tid, err
+}
+
 // Cancel 取消定时器
 func (t *TimerWheel) Cancel(timerID string) error {
+	t.lock.Lock()
+	defer t.lock.Unlock()
 	for _, it := range t.wheel {
-		for k := range it.items {
-			if timerID == k {
-				delete(it.items, k)
-			}
-		}
+		delete(it.items, timerID)
 	}
 	return nil
 }
@@ -204,7 +222,17 @@ func (t *TimerWheel) notifyExpiredTimeOut(tasks []*wheelTimeOut) {
 		if task.exptimes < task.times { // 如果执行的次数小于设置的次数，则再次调度
 			t.scheduleTimeOut(task)
 		}
-		go task.task()
+
+		if task.task != nil {
+			go task.task()
+		} else {
+			go func(times int) {
+				task.outCh <- struct{}{}
+				if times == task.times {
+					close(task.outCh)
+				}
+			}(task.exptimes)
+		}
 	}
 }
 

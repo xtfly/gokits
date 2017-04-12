@@ -9,7 +9,7 @@ import (
 
 var (
 	expfunc = func() {
-		fmt.Println("-----------------> run")
+		fmt.Println("----- timer trigger")
 	}
 )
 
@@ -48,9 +48,24 @@ func TestNotifyTask3times(t *testing.T) {
 	w := &sync.WaitGroup{}
 	w.Add(3)
 	wheel.AfterFunc(1*time.Second, 3, func() {
-		fmt.Println("-----------------> run")
+		fmt.Println("----- timer trigger")
 		w.Done()
 	})
+	w.Wait()
+}
+
+func TestNotifyTask3timesUseCh(t *testing.T) {
+	wheel := NewTimerWheel()
+	wheel.Start()
+	w := &sync.WaitGroup{}
+	w.Add(3)
+	go func() {
+		ch, _, _ := wheel.After(1*time.Second, 3)
+		for range ch {
+			w.Done()
+		}
+	}()
+
 	w.Wait()
 }
 

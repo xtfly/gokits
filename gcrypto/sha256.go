@@ -18,11 +18,7 @@ const (
 
 // generate a salt string by special length
 func getSalt(len int) string {
-	salt := make([]byte, len)
-	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
-		return ""
-	}
-	return base64.StdEncoding.EncodeToString(salt)
+	return base64.StdEncoding.EncodeToString(getSaltBytes(len))
 }
 
 func getSaltBytes(len int) []byte {
@@ -64,8 +60,5 @@ func GenPasswd(password string, saltLen int) (string, string) {
 // CmpPasswd compare the password
 func CmpPasswd(password, salt, encrypted string) bool {
 	nc := hmacSha256(password, salt)
-	if nc == encrypted {
-		return true
-	}
-	return false
+	return nc == encrypted
 }

@@ -3,6 +3,7 @@ package gcrypto
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"hash"
 )
@@ -62,10 +63,15 @@ func GenPbkdf2Passwd(password string, saltlen, iter, keyLen int) (string, string
 
 // CmpPbkdf2Passwd compare the password
 func CmpPbkdf2Passwd(password, salt, encrypted string, iter, keyLen int) bool {
-	saltbyts, err := base64.StdEncoding.DecodeString(salt)
+	pwdbs, err := base64.StdEncoding.DecodeString(encrypted)
 	if err != nil {
 		return false
 	}
-	nc := pbkdf2key([]byte(password), saltbyts, iter, keyLen, sha256.New)
-	return base64.StdEncoding.EncodeToString(nc) == encrypted
+
+	saltbs, err := base64.StdEncoding.DecodeString(salt)
+	if err != nil {
+		return false
+	}
+	nc := pbkdf2key([]byte(password), saltbs, iter, keyLen, sha256.New)
+	return 1 == subtle.ConstantTimeCompare(pwdbs, nc)
 }

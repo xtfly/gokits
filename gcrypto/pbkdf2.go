@@ -2,10 +2,12 @@ package gcrypto
 
 import (
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
 	"hash"
+	"io"
 )
 
 const (
@@ -52,6 +54,14 @@ func pbkdf2key(password, salt []byte, iter, keyLen int, h func() hash.Hash) []by
 		}
 	}
 	return dk[:keyLen]
+}
+
+func getSaltBytes(len int) []byte {
+	salt := make([]byte, len)
+	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
+		return []byte{}
+	}
+	return salt
 }
 
 // GenPbkdf2Passwd generate a hmac pbkdf2 string

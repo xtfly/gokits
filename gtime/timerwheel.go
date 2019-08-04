@@ -2,18 +2,17 @@ package gtime
 
 import (
 	"crypto/md5"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/hex"
 	"errors"
-	"io"
 	"sync"
 	"time"
+
+	"github.com/xtfly/gokits/grand"
 )
 
 const (
-	defaultTickDuration = 100 * time.Millisecond //默认的时间轮间隔时间
-	defaultWheelCount   = 512                    //默认的卡槽数512个
+	defaultTickDuration = 100 * time.Millisecond
+	defaultWheelCount   = 512
 )
 
 // TimerWheel 时钟轮
@@ -27,12 +26,12 @@ type TimerWheel struct {
 	wheelCursor   int           // 当前卡槽位置
 }
 
-// iterator 时间轮卡槽迭代器
+// iterator is a iterator for wheel timeout
 type iterator struct {
 	items map[string]*wheelTimeOut
 }
 
-// wheelTimeOut 超时处理对象
+// wheelTimeOut is a object to process timeout event
 type wheelTimeOut struct {
 	id       string        // 定时器标识
 	delay    time.Duration // 延迟时间
@@ -41,22 +40,36 @@ type wheelTimeOut struct {
 	task     func()        // 到期执行的任务
 	outCh    chan struct{} // 到期事件队列
 	times    int           // 超时设定的次数
-	exptimes int           // 已超时的次数
+	expTimes int           // 已超时的次数
 }
 
-// NewTimerWheel 初始化时间轮对象
-func NewTimerWheel() *TimerWheel {
-	return &TimerWheel{
+// TwOption is the configuration of TimerWheel
+type TwOption struct {
+	TickDuration time.Duration `json:"tick_duration" yaml:"tick_duration"`
+	WheelCount   int           `json:"wheel_count" yaml:"wheel_count"`
+}
+
+// NewTimerWheel create a instance of TimerWheel with given options
+func NewTimerWheel(opt ...TwOption) *TimerWheel {
+	tw := &TimerWheel{
 		tickDuration:  defaultTickDuration,
 		wheelCount:    defaultWheelCount,
-		wheel:         createWheel(defaultWheelCount),
 		quit:          make(chan struct{}),
 		wheelCursor:   0,
 		roundDuration: defaultTickDuration * defaultWheelCount,
 	}
+
+	if len(opt) >= 1 {
+		tw.tickDuration = opt[0].TickDuration
+		tw.wheelCount = opt[0].WheelCount
+	}
+
+	tw.roundDuration = tw.tickDuration * time.Duration(tw.wheelCount)
+	tw.createWheel(tw.wheelCount)
+	return tw
 }
 
-// Start 启动时间轮
+// Start a ticker for check expired items
 func (t *TimerWheel) Start() {
 	tick := time.NewTicker(t.tickDuration)
 	go func() {
@@ -79,27 +92,27 @@ func (t *TimerWheel) Start() {
 	}()
 }
 
-// Stop 停止时间轮
+// Stop the ticker
 func (t *TimerWheel) Stop() {
 	t.quit <- struct{}{}
 }
 
-func createWheel(wheelCount int) []*iterator {
+func (t *TimerWheel) createWheel(wheelCount int) {
 	arr := make([]*iterator, wheelCount)
 	for v := 0; v < wheelCount; v++ {
 		arr[v] = &iterator{items: make(map[string]*wheelTimeOut)}
 	}
-	return arr
+	t.wheel = arr
 }
 
-// AfterFunc 添加一个超时任务
-func (t *TimerWheel) AfterFunc(delay time.Duration, times int, f func()) (string, error) {
+// AfterFunc add a timer callback function which will trigger after the given interval time and trigger times
+func (t *TimerWheel) AfterFunc(interval time.Duration, times int, f func()) (string, error) {
 	if f == nil {
-		return "", errors.New("task is empty")
+		return "", errors.New("timer callback function is empty")
 	}
 
-	if delay <= 0 {
-		return "", errors.New("delay Must be greater than zero")
+	if interval <= 0 {
+		return "", errors.New("interval Must be greater than zero")
 	}
 
 	if times <= 0 {
@@ -107,19 +120,19 @@ func (t *TimerWheel) AfterFunc(delay time.Duration, times int, f func()) (string
 	}
 
 	timeOut := &wheelTimeOut{
-		delay: delay,
+		delay: interval,
 		task:  f,
 		times: times,
 	}
 
-	tid, err := t.scheduleTimeOut(timeOut)
-	return tid, err
+	tid := t.scheduleTimeOut(timeOut)
+	return tid, nil
 }
 
-// After 添加一个超时任务
-func (t *TimerWheel) After(delay time.Duration, times int) (chan struct{}, string, error) {
-	if delay <= 0 {
-		return nil, "", errors.New("delay Must be greater than zero")
+// After add a timer using the given interval time
+func (t *TimerWheel) After(interval time.Duration, times int) (chan struct{}, string, error) {
+	if interval <= 0 {
+		return nil, "", errors.New("interval Must be greater than zero")
 	}
 
 	if times <= 0 {
@@ -127,16 +140,16 @@ func (t *TimerWheel) After(delay time.Duration, times int) (chan struct{}, strin
 	}
 
 	timeOut := &wheelTimeOut{
-		delay: delay,
+		delay: interval,
 		outCh: make(chan struct{}),
 		times: times,
 	}
 
-	tid, err := t.scheduleTimeOut(timeOut)
-	return timeOut.outCh, tid, err
+	tid := t.scheduleTimeOut(timeOut)
+	return timeOut.outCh, tid, nil
 }
 
-// Cancel 取消定时器
+// Cancel the timer
 func (t *TimerWheel) Cancel(timerID string) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
@@ -146,7 +159,7 @@ func (t *TimerWheel) Cancel(timerID string) error {
 	return nil
 }
 
-func (t *TimerWheel) scheduleTimeOut(timeOut *wheelTimeOut) (string, error) {
+func (t *TimerWheel) scheduleTimeOut(timeOut *wheelTimeOut) string {
 	if timeOut.delay < t.tickDuration {
 		timeOut.delay = t.tickDuration
 	}
@@ -183,17 +196,13 @@ func (t *TimerWheel) scheduleTimeOut(timeOut *wheelTimeOut) (string, error) {
 	}
 
 	if timeOut.id == "" {
-		key, err := guid()
-		if err != nil {
-			return "", err
-		}
-		timeOut.id = key
+		timeOut.id = t.guid()
 	}
 
 	item.items[timeOut.id] = timeOut
 	t.wheel[stopIndex] = item
 
-	return timeOut.id, nil
+	return timeOut.id
 }
 
 // 判断当前卡槽中是否有超时任务,将超时task加入切片中
@@ -218,9 +227,9 @@ func (t *TimerWheel) fetchExpiredTimeouts(iter *iterator) []*wheelTimeOut {
 // 执行超时任务
 func (t *TimerWheel) notifyExpiredTimeOut(tasks []*wheelTimeOut) {
 	for _, task := range tasks {
-		task.exptimes++
-		if task.exptimes < task.times { // 如果执行的次数小于设置的次数，则再次调度
-			t.scheduleTimeOut(task)
+		task.expTimes++
+		if task.expTimes < task.times { // 如果执行的次数小于设置的次数，则再次调度
+			_ = t.scheduleTimeOut(task)
 		}
 
 		if task.task != nil {
@@ -231,23 +240,18 @@ func (t *TimerWheel) notifyExpiredTimeOut(tasks []*wheelTimeOut) {
 				if times == task.times {
 					close(task.outCh)
 				}
-			}(task.exptimes)
+			}(task.expTimes)
 		}
 	}
 }
 
-func md5str(s string) string {
+func (t *TimerWheel) md5str(s string) string {
 	h := md5.New()
 	h.Write([]byte(s))
 	return hex.EncodeToString(h.Sum(nil))
 
 }
 
-func guid() (string, error) {
-	b := make([]byte, 32)
-	if _, err := io.ReadFull(rand.Reader, b); err != nil {
-		return "", err
-	}
-
-	return md5str(base64.URLEncoding.EncodeToString(b)), nil
+func (t *TimerWheel) guid() string {
+	return grand.NewUUID()
 }

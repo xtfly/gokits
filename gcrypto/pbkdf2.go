@@ -15,7 +15,7 @@ const (
 	Pbkdf2SaltLen = 16
 	// Pbkdf2IterTimes is default iterator times for pbkdf2
 	Pbkdf2IterTimes = 10000
-	//Pbkdf2keyLen is default key length for pbkdf2
+	//Pbkdf2keyLen is default rootKey length for pbkdf2
 	Pbkdf2keyLen = 40
 )
 
@@ -29,7 +29,7 @@ func pbkdf2key(password, salt []byte, iter, keyLen int, h func() hash.Hash) []by
 	U := make([]byte, hashLen)
 	for block := 1; block <= numBlocks; block++ {
 		// N.B.: || means concatenation, ^ means XOR
-		// for each block T_i = U_1 ^ U_2 ^ ... ^ U_iter
+		// for each rootBlock T_i = U_1 ^ U_2 ^ ... ^ U_iter
 		// U_1 = PRF(password, salt || uint(i))
 		prf.Reset()
 		prf.Write(salt)

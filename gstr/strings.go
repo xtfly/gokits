@@ -9,11 +9,11 @@ const regexStrictEmailPattern = `(?i)[A-Z0-9!#$%&'*+/=?^_{|}~-]+` +
 
 var (
 	digitRegexp             = regexp.MustCompile(`^[0-9]+$`)
-	chletterNumUnlineRegexp = regexp.MustCompile(`^[\x{4e00}-\x{9fa5}_a-zA-Z0-9]+$`)
+	chLetterNumUnlineRegexp = regexp.MustCompile(`^[\x{4e00}-\x{9fa5}_a-zA-Z0-9]+$`)
 	letterNumUnlineRegexp   = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
-	cheseRegexp             = regexp.MustCompile(`^[\x{4e00}-\x{9fa5}]+$`)
+	chineseRegexp           = regexp.MustCompile(`^[\x{4e00}-\x{9fa5}]+$`)
 	emailRegexp             = regexp.MustCompile(`(?i)[A-Z0-9._%+-]+@(?:[A-Z0-9-]+\.)+[A-Z]{2,6}`)
-	strictemailRegexp       = regexp.MustCompile(regexStrictEmailPattern)
+	strictEmailRegexp       = regexp.MustCompile(regexStrictEmailPattern)
 	urlRegexp               = regexp.MustCompile(`(ftp|http|https):\/\/(\w+:{0,1}\w*@)?(\S+)(:[0-9]+)?(\/|\/([\w#!:.?+=&%@!\-\/]))?`)
 )
 
@@ -24,7 +24,7 @@ func IsDigit(str string) bool {
 
 // IsChineseLetterNumUnline ...
 func IsChineseLetterNumUnline(str string) bool {
-	return chletterNumUnlineRegexp.MatchString(str)
+	return chLetterNumUnlineRegexp.MatchString(str)
 }
 
 // IsLetterNumUnline ...
@@ -34,7 +34,7 @@ func IsLetterNumUnline(str string) bool {
 
 // IsChinese ...
 func IsChinese(str string) bool {
-	return cheseRegexp.MatchString(str)
+	return chineseRegexp.MatchString(str)
 }
 
 // IsEmail ...
@@ -44,7 +44,7 @@ func IsEmail(str string) bool {
 
 // IsEmailRFC ...
 func IsEmailRFC(str string) bool {
-	return strictemailRegexp.MatchString(str)
+	return strictEmailRegexp.MatchString(str)
 }
 
 // IsURL ...

@@ -6,10 +6,8 @@ import (
 	"strconv"
 )
 
-type (
-	// HumanBytes struct
-	HumanBytes struct{}
-)
+// humanBytes struct
+type humanBytes struct{}
 
 const (
 	_ = 1.0 << (10 * iota) // ignore first value by assigning to blank identifier
@@ -22,18 +20,18 @@ const (
 )
 
 var (
-	pattern = regexp.MustCompile(`(?i)^(-?\d+(?:\.\d+)?)\s?([KMGTPE]B?|B?)$`)
-	global  = New()
+	byteStrPattern = regexp.MustCompile(`(?i)^(-?\d+(?:\.\d+)?)\s?([KMGTPE]B?|B?)$`)
+	gHumanBytes    = newHumanBytes()
 )
 
-// New creates a HumanBytes instance.
-func New() *HumanBytes {
-	return &HumanBytes{}
+// newhumanBytes creates a humanBytes instance.
+func newHumanBytes() *humanBytes {
+	return &humanBytes{}
 }
 
 // Format formats bytes integer to human readable string.
 // For example, 31323 bytes will return 30.59KB.
-func (*HumanBytes) Format(b int64) string {
+func (*humanBytes) Format(b int64) string {
 	multiple := ""
 	value := float64(b)
 
@@ -67,8 +65,8 @@ func (*HumanBytes) Format(b int64) string {
 
 // Parse parses human readable bytes string to bytes integer.
 // For example, 6GB (6G is also valid) will return 6442450944.
-func (*HumanBytes) Parse(value string) (i int64, err error) {
-	parts := pattern.FindStringSubmatch(value)
+func (*humanBytes) Parse(value string) (i int64, err error) {
+	parts := byteStrPattern.FindStringSubmatch(value)
 	if len(parts) < 3 {
 		return 0, fmt.Errorf("error parsing value=%s", value)
 	}
@@ -97,12 +95,12 @@ func (*HumanBytes) Parse(value string) (i int64, err error) {
 	}
 }
 
-// FormatHumanBytes wraps global Bytes's Format function.
+// FormatHumanBytes wraps gHumanBytes Bytes's Format function.
 func FormatHumanBytes(b int64) string {
-	return global.Format(b)
+	return gHumanBytes.Format(b)
 }
 
-// ParseHumanBytes wraps global Bytes's Parse function.
+// ParseHumanBytes wraps gHumanBytes Bytes's Parse function.
 func ParseHumanBytes(val string) (int64, error) {
-	return global.Parse(val)
+	return gHumanBytes.Parse(val)
 }

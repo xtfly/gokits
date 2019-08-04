@@ -215,13 +215,13 @@ func (c *cache) UpdateExpiration(k string, Expiration int64) error {
 func (j *janitor) run(c *cache) {
 	j.stop = make(chan bool)
 	ticker := time.NewTicker(j.Interval)
+	ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
 			c.DeleteExpired()
 		case <-j.stop:
-			ticker.Stop()
-			return
+			break
 		}
 	}
 }

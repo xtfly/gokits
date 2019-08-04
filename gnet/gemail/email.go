@@ -1,4 +1,4 @@
-package gnet
+package gemail
 
 import (
 	"bytes"

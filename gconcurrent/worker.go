@@ -36,29 +36,21 @@ type WorkerPool interface {
 	// Stop cancel all goroutines started by this pool and wait
 	Shutdown(ctx context.Context)
 
-	// GetActiveNum return the current number of active goroutine which is processing a job
-	GetActiveNum() int
+	// Stats return the statistics of worker pool
+	Stats() WpStats
 
-	// GetWorkerNum return the number of started worker goroutine
-	GetWorkerNum() int
-
-	// GetQueueSize return the number of queue size
-	GetQueueSize() int
+	// Option return the configuration of worker pool
+	Option() WpOption
 }
 
 type workerPool struct {
-	queue         chan *queueItem
-	queueSize     int
-	workerNum     int32
-	initWorkerNum int
-	maxWorkerNum  int
-	activeNum     int32
+	queue  chan *queueItem
+	option WpOption
+	stats  WpStats
 
 	mux    sync.Mutex
 	ctx    context.Context
 	cancel context.CancelFunc
-
-	handlePanic PanicFunc
 }
 
 // WpOption is the worker pool parameter
@@ -69,6 +61,15 @@ type WpOption struct {
 	PanicFunc     PanicFunc `json:"-"`
 }
 
+// WpStats is the statistics of worker pool
+type WpStats struct {
+	ActiveNum     int32
+	WorkerNum     int32
+	ExecuteNum    int32
+	SubmitFailNum int32
+	PanicNum      int32
+}
+
 // NewWorkerPool creates a instance of WorkerPool with given option
 // default parameters:
 //   queueSize: 100
@@ -77,37 +78,32 @@ type WpOption struct {
 func NewWorkerPool(opt ...WpOption) WorkerPool {
 	ctx, cancel := context.WithCancel(context.TODO())
 	wp := &workerPool{
-		queueSize:     100,
-		initWorkerNum: 2,
-		maxWorkerNum:  50,
-		ctx:           ctx,
-		cancel:        cancel,
+		option: WpOption{
+			InitWorkerNum: 2,
+			MaxWorkerNum:  50,
+			QueueSize:     100,
+		},
+		ctx:    ctx,
+		cancel: cancel,
 	}
 
 	if len(opt) >= 1 {
 		cfg := opt[0]
-		wp.initWorkerNum = cfg.InitWorkerNum
-		wp.maxWorkerNum = cfg.MaxWorkerNum
-		wp.queueSize = cfg.QueueSize
-		wp.handlePanic = cfg.PanicFunc
+		wp.option = cfg
 	}
 
-	wp.queue = make(chan *queueItem, wp.queueSize)
-	wp.run(wp.initWorkerNum)
+	wp.queue = make(chan *queueItem, wp.option.QueueSize)
+	wp.run(wp.option.InitWorkerNum)
 
 	return wp
 }
 
-func (w *workerPool) GetActiveNum() int {
-	return int(atomic.LoadInt32(&w.activeNum))
+func (w *workerPool) Stats() WpStats {
+	return w.stats
 }
 
-func (w *workerPool) GetWorkerNum() int {
-	return int(atomic.LoadInt32(&w.workerNum))
-}
-
-func (w *workerPool) GetQueueSize() int {
-	return w.queueSize
+func (w *workerPool) Option() WpOption {
+	return w.option
 }
 
 func (w *workerPool) toItem(jf JobFunc) *queueItem {
@@ -123,7 +119,7 @@ func (w *workerPool) toItem(jf JobFunc) *queueItem {
 
 func (w *workerPool) run(incNum int) {
 	for idx := 0; idx < incNum; idx++ {
-		atomic.AddInt32(&w.workerNum, 1)
+		atomic.AddInt32(&w.stats.WorkerNum, 1)
 		go func() {
 			for it := range w.queue {
 				w.executeOne(it)
@@ -133,34 +129,37 @@ func (w *workerPool) run(incNum int) {
 }
 
 func (w *workerPool) executeOne(it *queueItem) {
-	atomic.AddInt32(&w.activeNum, 1)
+	atomic.AddInt32(&w.stats.ActiveNum, 1)
+
 	defer func() {
+		atomic.AddInt32(&w.stats.PanicNum, 1)
+		atomic.AddInt32(&w.stats.ActiveNum, -1)
 		recovered := recover()
-		if recovered != nil && w.handlePanic != nil {
-			w.handlePanic(recovered, it.funcName)
+		if recovered != nil && w.option.PanicFunc != nil {
+			w.option.PanicFunc(recovered, it.funcName)
 		}
-		atomic.AddInt32(&w.activeNum, -1)
 	}()
+
 	it.jobFunc(w.ctx)
+	atomic.AddInt32(&w.stats.ExecuteNum, 1)
 }
 
 func (w *workerPool) incWorker() {
-	activeNum := w.GetActiveNum()
-	workerNum := w.GetWorkerNum()
-	if activeNum == workerNum && workerNum < w.maxWorkerNum {
+	activeNum := int(atomic.LoadInt32(&w.stats.ActiveNum))
+	workerNum := int(atomic.LoadInt32(&w.stats.WorkerNum))
+	if activeNum == workerNum && workerNum < w.option.MaxWorkerNum {
 		w.mux.Lock()
-		workerNum = w.GetWorkerNum()
+		atomic.LoadInt32(&w.stats.WorkerNum)
 		incNum := workerNum / 2
 		if incNum < 1 {
 			incNum = 1
 		}
-		if workerNum+incNum > w.maxWorkerNum {
-			incNum = w.maxWorkerNum - workerNum
+		if workerNum+incNum > w.option.MaxWorkerNum {
+			incNum = w.option.MaxWorkerNum - int(workerNum)
 		}
-		w.run(incNum)
+		w.run(int(incNum))
 		w.mux.Unlock()
 	}
-
 }
 
 func (w *workerPool) Execute(jf JobFunc) {
@@ -172,6 +171,7 @@ func (w *workerPool) Submit(jf JobFunc, timeout time.Duration) error {
 	w.incWorker()
 	select {
 	case <-time.NewTimer(timeout).C:
+		atomic.AddInt32(&w.stats.SubmitFailNum, 1)
 		return ErrTimeout
 	case w.queue <- w.toItem(jf):
 		return nil
@@ -180,6 +180,7 @@ func (w *workerPool) Submit(jf JobFunc, timeout time.Duration) error {
 
 func (w *workerPool) Shutdown(ctx context.Context) {
 	close(w.queue)
+	w.queue = nil
 	w.cancel()
 
 	for {
@@ -196,5 +197,5 @@ func (w *workerPool) Shutdown(ctx context.Context) {
 }
 
 func (w *workerPool) checkNoActive() bool {
-	return atomic.LoadInt32(&w.activeNum) == 0
+	return atomic.LoadInt32(&w.stats.ActiveNum) == 0
 }

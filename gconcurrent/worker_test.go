@@ -12,12 +12,11 @@ func TestWorkerParam(t *testing.T) {
 
 	}
 	w := NewWorkerPool(WpOption{InitWorkerNum: 1, MaxWorkerNum: 5, QueueSize: 10, PanicFunc: pf})
-	wp := w.(*workerPool)
-	assert.Equal(t, 0, w.GetActiveNum())
-	assert.Equal(t, 1, w.GetWorkerNum())
-	assert.Equal(t, 10, w.GetQueueSize())
-	assert.Equal(t, 5, wp.maxWorkerNum)
-	assert.NotNil(t, wp.handlePanic)
+	assert.Equal(t, int32(0), w.Stats().ActiveNum)
+	assert.Equal(t, int32(1), w.Stats().WorkerNum)
+	assert.Equal(t, 10, w.Option().QueueSize)
+	assert.Equal(t, 5, w.Option().MaxWorkerNum)
+	assert.NotNil(t, w.Option().PanicFunc)
 	w.Shutdown(context.Background())
 }
 
@@ -31,11 +30,11 @@ func TestWorkerExecute(t *testing.T) {
 	})
 
 	<-evt
-	assert.Equal(t, 1, w.GetActiveNum())
+	assert.Equal(t, int32(1), w.Stats().ActiveNum)
 
 	<-evt
 	time.Sleep(20 * time.Millisecond)
-	assert.Equal(t, 0, w.GetActiveNum())
+	assert.Equal(t, int32(0), w.Stats().ActiveNum)
 
 	close(evt)
 	w.Shutdown(context.Background())
@@ -58,7 +57,7 @@ func TestWorkerExecuteIncWorker(t *testing.T) {
 
 	<-evt
 	<-evt
-	assert.Equal(t, 2, w.GetWorkerNum())
+	assert.Equal(t, int32(2), w.Stats().WorkerNum)
 
 	close(evt)
 	w.Shutdown(context.Background())

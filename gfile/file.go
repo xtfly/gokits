@@ -1,6 +1,7 @@
 package gfile
 
 import (
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -47,4 +48,66 @@ func GetProcPwd() string {
 func GetPwd() string {
 	dir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
 	return dir
+}
+
+// CopyFile is a utility to assist with copying a file from src to dest.
+// Note that file permissions are maintained.
+func CopyFile(src, dest string) error {
+	source, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+
+	destFile, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	_, err = io.Copy(destFile, source)
+	if err != nil {
+		return err
+	}
+
+	sourceInfo, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+
+	return os.Chmod(dest, sourceInfo.Mode())
+}
+
+// CopyDir is a utility to assist with copying a directory from src to dest.
+// Note that directory permissions are not maintained, but the permissions of
+// the files in those directories are.
+func CopyDir(src, dest string, dirMode os.FileMode) error {
+	dir, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(dest, dirMode); err != nil {
+		return err
+	}
+
+	files, err := dir.Readdir(-1)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		srcPath := filepath.Join(src, file.Name())
+		dstPath := filepath.Join(dest, file.Name())
+		if file.IsDir() {
+			if err := CopyDir(srcPath, dstPath, dirMode); err != nil {
+				return err
+			}
+		} else {
+			if err := CopyFile(srcPath, dstPath); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

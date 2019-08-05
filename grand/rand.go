@@ -11,6 +11,10 @@ import (
 	crand "crypto/rand"
 )
 
+const (
+	DefaultRandStrRange = "abcdefghijklmnopqrstuvwxyz"
+)
+
 // NewRandWithPrefix Create a rang string with prefix
 func NewRandWithPrefix(prefix string, len int) string {
 	return hex.EncodeToString([]byte(prefix)) + NewRand(len)
@@ -75,4 +79,15 @@ func NormRand(n int64) float64 {
 	}
 
 	return math.Abs(float64(sample))
+}
+
+// StringRand returns a 'random' string. Don't rely on this to have a secure
+// level of entropy.
+func StringRand(strRange string, n int) string {
+	letterBytes := strRange
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
 }

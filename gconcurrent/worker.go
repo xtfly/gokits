@@ -132,16 +132,18 @@ func (w *workerPool) executeOne(it *queueItem) {
 	atomic.AddInt32(&w.stats.ActiveNum, 1)
 
 	defer func() {
-		atomic.AddInt32(&w.stats.PanicNum, 1)
 		atomic.AddInt32(&w.stats.ActiveNum, -1)
 		recovered := recover()
-		if recovered != nil && w.option.PanicFunc != nil {
-			w.option.PanicFunc(recovered, it.funcName)
+		if recovered != nil {
+			atomic.AddInt32(&w.stats.PanicNum, 1)
+			if w.option.PanicFunc != nil {
+				w.option.PanicFunc(recovered, it.funcName)
+			}
 		}
 	}()
 
-	it.jobFunc(w.ctx)
 	atomic.AddInt32(&w.stats.ExecuteNum, 1)
+	it.jobFunc(w.ctx)
 }
 
 func (w *workerPool) incWorker() {
